@@ -25,33 +25,39 @@ module private WinApi =
 type VtWindowsError =
     | FailedGetMode
     | FailedSetMode
+    | UnsupportedOs
 
 module VT =
     let (>>=) x f = Result.bind f x
 
-    let private isWindows () =
+    let isWindows () =
         match Environment.OSVersion.Platform with
         | PlatformID.Win32NT
         | PlatformID.Win32S
-        | PlatformID.Win32Windows -> true
-        | _ -> false
+        | PlatformID.Win32Windows -> Ok ()
+        | _ -> Error UnsupportedOs
 
-    let private getInputModes stdIn stdOut : Result<uint32*uint32, _> =
+    let getHandles () =
+        let stdIn = GetStdHandle(STD_INPUT_HANDLE)
+        let stdOut = GetStdHandle(STD_OUTPUT_HANDLE)
+        Ok (stdIn, stdOut)
+
+    let private getInputModes (stdIn, stdOut) : Result<_, _> =
         let mutable inMode : uint32 = 0u
         let mutable outMode : uint32 = 0u
         let inSuccess = GetConsoleMode(stdIn, &inMode)
         let outSuccess = GetConsoleMode(stdOut, &outMode)
 
         match (inSuccess && outSuccess) with
-        | true -> Ok (inMode, outMode)
+        | true -> Ok (stdIn, stdOut, inMode, outMode)
         | false -> Error FailedGetMode
 
-    let private transform (inMode, outMode) =
+    let private transform (stdIn, stdOut, inMode, outMode) =
         let inMode = inMode ||| ENABLE_VIRTUAL_TERMINAL_INPUT
         let outMode = outMode ||| ENABLE_VIRTUAL_TERMINAL_PROCESSING ||| DISABLE_NEWLINE_AUTO_RETURN
-        Ok (inMode, outMode)
+        Ok (stdIn, stdOut, inMode, outMode)
 
-    let private setInputModes stdIn stdOut (inMode, outMode) =
+    let private setInputModes (stdIn, stdOut, inMode, outMode) =
         let inSuccess = SetConsoleMode(stdIn, inMode)
         let outSuccess = SetConsoleMode(stdOut, outMode)
 
@@ -60,8 +66,8 @@ module VT =
         | false -> Error FailedSetMode
 
     let enable () =
-        let stdIn = GetStdHandle(STD_INPUT_HANDLE)
-        let stdOut = GetStdHandle(STD_OUTPUT_HANDLE)
-        getInputModes stdIn stdOut
+        isWindows ()
+        >>= getHandles
+        >>= getInputModes
         >>= transform
-        >>= setInputModes stdIn stdOut
+        >>= setInputModes
