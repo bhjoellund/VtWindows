@@ -1,3 +1,5 @@
+![AppVeyor build status](https://ci.appveyor.com/api/projects/status/krprf88vw8s51ii3?svg=true)
+
 # VtWindows
 
 Just a very simple repository to enable using Virtual Terminal (VT) sequences in a Windows command-line application
