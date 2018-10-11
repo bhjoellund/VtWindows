@@ -1,4 +1,4 @@
-![AppVeyor build status](https://ci.appveyor.com/api/projects/status/krprf88vw8s51ii3?svg=true)
+[![Build status](https://ci.appveyor.com/api/projects/status/krprf88vw8s51ii3?svg=true)](https://ci.appveyor.com/project/mofibrian/vtwindows)
 
 # VtWindows
 
