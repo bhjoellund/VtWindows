@@ -27,6 +27,10 @@ type VtWindowsError =
     | FailedSetMode
     | UnsupportedOs
 
+type Transform =
+    | Enable
+    | Disable
+
 module VT =
     let (>>=) x f = Result.bind f x
 
@@ -37,7 +41,7 @@ module VT =
         | PlatformID.Win32Windows -> Ok ()
         | _ -> Error UnsupportedOs
 
-    let getHandles () =
+    let private getHandles () =
         let stdIn = GetStdHandle(STD_INPUT_HANDLE)
         let stdOut = GetStdHandle(STD_OUTPUT_HANDLE)
         Ok (stdIn, stdOut)
@@ -52,10 +56,22 @@ module VT =
         | true -> Ok (stdIn, stdOut, inMode, outMode)
         | false -> Error FailedGetMode
 
-    let private transform (stdIn, stdOut, inMode, outMode) =
-        let inMode = inMode ||| ENABLE_VIRTUAL_TERMINAL_INPUT
-        let outMode = outMode ||| ENABLE_VIRTUAL_TERMINAL_PROCESSING ||| DISABLE_NEWLINE_AUTO_RETURN
-        Ok (stdIn, stdOut, inMode, outMode)
+    let private disableBits bits x =
+        if x &&& bits = bits
+        then x ^^^ bits
+        else x
+
+    let private transform t (stdIn, stdOut, inMode, outMode) =
+        match t with
+        | Enable ->
+            let inMode = inMode ||| ENABLE_VIRTUAL_TERMINAL_INPUT
+            let outMode = outMode ||| ENABLE_VIRTUAL_TERMINAL_PROCESSING ||| DISABLE_NEWLINE_AUTO_RETURN
+            Ok (stdIn, stdOut, inMode, outMode)
+        | Disable ->
+            let inMode = disableBits ENABLE_VIRTUAL_TERMINAL_INPUT inMode
+            let outMode = disableBits outMode ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                          |> disableBits DISABLE_NEWLINE_AUTO_RETURN
+            Ok (stdIn, stdOut, inMode, outMode)
 
     let private setInputModes (stdIn, stdOut, inMode, outMode) =
         let inSuccess = SetConsoleMode(stdIn, inMode)
@@ -65,9 +81,16 @@ module VT =
         | true -> Ok ()
         | false -> Error FailedSetMode
 
-    let enable () =
+    let private toggle t =
         isWindows ()
         >>= getHandles
         >>= getInputModes
-        >>= transform
+        >>= transform t
         >>= setInputModes
+
+    let enable () =
+        toggle Enable
+
+    let disable () =
+        toggle Disable
+
